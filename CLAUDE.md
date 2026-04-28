@@ -4,23 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**filesizer** — a Python application for visualizing file and folder sizes on disk, with options to delete or move them.
+**filesizer** — a browser-based disk usage visualizer. Launch from the command line, pick a directory, and get a sorted breakdown of disk usage with the ability to delete or move items from a local browser window.
 
-## Status
+## Stack
 
-This project is in early development. No source code, dependencies, or build tooling exist yet. The `.idea/filesizer.iml` confirms it is configured as a Python module in IntelliJ IDEA.
+- **Backend**: Python 3.11+, FastAPI, uvicorn
+- **Frontend**: Single-file vanilla JS/HTML (`src/filesizer/static/index.html`) — no build step
+- **File ops**: `send2trash` for safe (trash-based) deletion; `shutil` for permanent delete and move
+- **Tests**: pytest + pytest-asyncio + httpx
 
-## Getting Started
+## Architecture
 
-When adding code, establish the project structure first:
+| Module | Responsibility |
+|--------|---------------|
+| `cli.py` | Entry point — argument parsing, launches uvicorn, opens browser |
+| `scanner.py` | Recursive directory scan with async wrapper; cycle detection via symlink resolution |
+| `fileops.py` | `delete_item` and `move_item` with path validation (prevents escaping root) |
+| `server.py` | FastAPI app — `/api/scan`, `/api/delete`, `/api/move` endpoints |
+| `static/index.html` | Full frontend — dark theme, directory tree, size bars |
 
-- Use a `src/` or flat layout with a top-level package named `filesizer`
-- Add `requirements.txt` or `pyproject.toml` for dependencies
-- Add a `README.md` with setup and usage instructions once the stack is decided
+## Running Locally
 
-## Architecture Intent
+```bash
+pip install -e ".[dev]"
+python -m filesizer              # directory picker on launch
+python -m filesizer /some/path   # jump straight to a directory
+```
 
-The application needs to:
-1. Scan a directory tree and compute sizes recursively
-2. Present a navigable view of files/folders sorted or grouped by size
-3. Allow the user to delete or move selected items
+Server starts at `http://127.0.0.1:8765` (auto-increments port if taken) and opens the browser automatically.
+
+## Running Tests
+
+```bash
+python -m pytest
+```
+
+## Known Issues
+
+- **Delete does not work** — the `/api/delete` endpoint and `fileops.delete_item` backend logic appear correct, but the delete action triggered from the frontend does not successfully remove items. The bug is likely in how the frontend constructs or sends the delete request (`static/index.html`). Needs investigation.
+
+## Design
+
+This project was designed using [OpenSpec](https://openspec.dev) for structured specification and built with [Claude Code](https://claude.ai/code). Design documents and feature specs are in the `openspec/` directory.
