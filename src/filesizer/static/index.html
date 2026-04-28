@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>filesizer</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1c1f2e;
+      --border: #2d3147;
+      --accent: #4f8ef7;
+      --text: #e2e8f0;
+      --muted: #6b7280;
+      --danger: #ef4444;
+      --dir-color: #fbbf24;
+      --bar-bg: #2a2e42;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+      letter-spacing: -0.3px;
+    }
+
+    .scan-bar {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      max-width: 720px;
+    }
+
+    #path-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'Consolas', 'Cascadia Code', monospace;
+    }
+
+    #path-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.danger { background: var(--danger); }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    button.small { padding: 3px 10px; font-size: 12px; }
+
+    #breadcrumb {
+      padding: 9px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      min-height: 36px;
+    }
+
+    .bc-sep { color: var(--muted); padding: 0 2px; }
+
+    .bc-item {
+      color: var(--accent);
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+
+    .bc-item:hover { background: var(--border); }
+
+    .bc-item.last {
+      color: var(--text);
+      font-weight: 500;
+      cursor: default;
+    }
+
+    .bc-item.last:hover { background: transparent; }
+
+    #status {
+      padding: 8px 20px;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+    }
+
+    .error-msg {
+      color: var(--danger);
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 15px;
+      height: 15px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #content { padding: 0 20px 32px; }
+
+    .dir-summary {
+      padding: 8px 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th.right { text-align: right; }
+
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    td { padding: 7px 12px; vertical-align: middle; }
+
+    .name-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon { font-size: 15px; line-height: 1; flex-shrink: 0; }
+
+    .item-name {
+      font-family: 'Consolas', 'Cascadia Code', monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .dir-name { color: var(--dir-color); cursor: pointer; }
+    .dir-name:hover { text-decoration: underline; }
+
+    .size-cell {
+      font-family: 'Consolas', 'Cascadia Code', monospace;
+      font-size: 13px;
+      white-space: nowrap;
+      text-align: right;
+      min-width: 80px;
+    }
+
+    .bar-cell { min-width: 140px; }
+
+    .bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .bar-bg {
+      flex: 1;
+      height: 5px;
+      background: var(--bar-bg);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+    }
+
+    .bar-pct {
+      font-size: 11px;
+      color: var(--muted);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .actions-cell {
+      white-space: nowrap;
+    }
+
+    .actions-cell { display: flex; gap: 5px; }
+
+    .empty-msg {
+      padding: 32px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* Modal */
+    #modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    #modal-overlay.hidden { display: none; }
+
+    #modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      max-width: 460px;
+      width: 92%;
+    }
+
+    #modal-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    #modal-error {
+      color: var(--danger);
+      font-size: 12px;
+      margin-bottom: 10px;
+      min-height: 18px;
+    }
+
+    #modal-body {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    #modal-body .path-highlight {
+      display: block;
+      color: var(--text);
+      font-family: 'Consolas', 'Cascadia Code', monospace;
+      font-size: 12px;
+      word-break: break-all;
+      margin-top: 4px;
+      background: var(--bg);
+      padding: 6px 10px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+    }
+
+    #modal-body input[type=text] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'Consolas', 'Cascadia Code', monospace;
+      margin-top: 8px;
+    }
+
+    #modal-body input[type=text]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    #modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <h1>filesizer</h1>
+    <div class="scan-bar">
+      <input type="text" id="path-input"
+             placeholder="Enter directory path and press Enter…"
+             autocomplete="off" spellcheck="false" />
+      <button id="scan-btn">Scan</button>
+    </div>
+  </header>
+  <div id="breadcrumb"></div>
+  <div id="status"></div>
+  <div id="content"></div>
+</div>
+
+<div id="modal-overlay" class="hidden">
+  <div id="modal">
+    <div id="modal-title"></div>
+    <div id="modal-error"></div>
+    <div id="modal-body"></div>
+    <div id="modal-actions"></div>
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────
+
+  const state = {
+    scanRoot: null,
+    currentPath: null,
+    items: [],
+    loading: false,
+    error: null,
+    totalSize: 0,
+  };
+
+  // ── Utilities ──────────────────────────────────────────────────
+
+  function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 ** 2) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 ** 3) return (bytes / 1024 ** 2).toFixed(1) + ' MB';
+    return (bytes / 1024 ** 3).toFixed(2) + ' GB';
+  }
+
+  function normSep(p) { return p.replace(/\\/g, '/'); }
+
+  function getSep(p) { return p.includes('\\') ? '\\' : '/'; }
+
+  // ── Breadcrumb helpers ─────────────────────────────────────────
+
+  function getBreadcrumbSegments() {
+    if (!state.scanRoot || !state.currentPath) return [];
+    const sep = getSep(state.scanRoot);
+    const root = state.scanRoot.replace(/[/\\]+$/, '');
+    const current = state.currentPath.replace(/[/\\]+$/, '');
+    const rootName = root.split(/[/\\]/).filter(Boolean).pop() || root;
+
+    if (normSep(root) === normSep(current)) {
+      return [{ name: rootName, path: root, isLast: true }];
+    }
+
+    const normRoot = normSep(root);
+    const normCurrent = normSep(current);
+    if (!normCurrent.startsWith(normRoot)) {
+      return [{ name: normCurrent, path: current, isLast: true }];
+    }
+
+    const relative = normCurrent.slice(normRoot.length).replace(/^\//, '');
+    const relParts = relative.split('/').filter(Boolean);
+
+    const segs = [{ name: rootName, path: root, isLast: false }];
+    let acc = root;
+    relParts.forEach((part, i) => {
+      acc = acc + sep + part;
+      segs.push({ name: part, path: acc, isLast: i === relParts.length - 1 });
+    });
+    return segs;
+  }
+
+  // ── API ────────────────────────────────────────────────────────
+
+  async function scan(path, isNewRoot) {
+    state.loading = true;
+    state.error = null;
+    render();
+
+    try {
+      const res = await fetch('/api/scan?' + new URLSearchParams({ path }));
+      const data = await res.json();
+      if (!res.ok) {
+        state.error = data.detail || 'Scan failed';
+        state.items = [];
+        state.totalSize = 0;
+      } else {
+        if (isNewRoot) state.scanRoot = path;
+        state.currentPath = path;
+        state.items = (data.children || []).slice().sort((a, b) => b.size - a.size);
+        state.totalSize = data.size;
+      }
+    } catch (e) {
+      state.error = 'Network error: ' + e.message;
+      state.items = [];
+      state.totalSize = 0;
+    } finally {
+      state.loading = false;
+      render();
+    }
+  }
+
+  async function apiDelete(path, permanent) {
+    const res = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, root: state.scanRoot, permanent }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `Delete failed (HTTP ${res.status})`);
+    }
+  }
+
+  async function apiMove(source, destination) {
+    const res = await fetch('/api/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, destination, root: state.scanRoot }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `Move failed (HTTP ${res.status})`);
+    }
+  }
+
+  // ── Modal ──────────────────────────────────────────────────────
+
+  function showModal(title, bodyHTML, actions) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = bodyHTML;
+    document.getElementById('modal-error').textContent = '';
+    const actDiv = document.getElementById('modal-actions');
+    actDiv.innerHTML = '';
+    actions.forEach(({ label, cls, handler }) => {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      if (cls) btn.className = cls;
+      btn.addEventListener('click', handler);
+      actDiv.appendChild(btn);
+    });
+    document.getElementById('modal-overlay').classList.remove('hidden');
+  }
+
+  function hideModal() {
+    document.getElementById('modal-overlay').classList.add('hidden');
+  }
+
+  function setModalError(msg) {
+    document.getElementById('modal-error').textContent = msg;
+  }
+
+  // ── Delete flow ────────────────────────────────────────────────
+
+  function promptDelete(item) {
+    showModal(
+      'Delete Item',
+      `<p>Move to trash:</p><span class="path-highlight">${escHtml(item.path)}</span>`,
+      [
+        {
+          label: 'Move to Trash',
+          cls: 'danger',
+          handler: async () => {
+            try {
+              await apiDelete(item.path, false);
+              state.items = state.items.filter(i => i.path !== item.path);
+              hideModal();
+              renderContent();
+            } catch (e) {
+              setModalError(e.message);
+            }
+          },
+        },
+        { label: 'Cancel', cls: 'secondary', handler: hideModal },
+      ]
+    );
+  }
+
+  // ── Move flow ──────────────────────────────────────────────────
+
+  function promptMove(item) {
+    showModal(
+      'Move Item',
+      `<p>Moving:</p><span class="path-highlight">${escHtml(item.path)}</span>
+       <p style="margin-top:12px">Destination directory:</p>
+       <input type="text" id="move-dest" value="${escAttr(state.currentPath || '')}" />`,
+      [
+        {
+          label: 'Move',
+          handler: async () => {
+            const dest = document.getElementById('move-dest').value.trim();
+            if (!dest) { setModalError('Enter a destination path.'); return; }
+            try {
+              await apiMove(item.path, dest);
+              state.items = state.items.filter(i => i.path !== item.path);
+              hideModal();
+              renderContent();
+            } catch (e) {
+              setModalError(e.message);
+            }
+          },
+        },
+        { label: 'Cancel', cls: 'secondary', handler: hideModal },
+      ]
+    );
+    // Focus the input after modal renders
+    setTimeout(() => {
+      const inp = document.getElementById('move-dest');
+      if (inp) { inp.focus(); inp.select(); }
+    }, 50);
+  }
+
+  // ── Escape helpers ─────────────────────────────────────────────
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function escAttr(s) { return escHtml(s); }
+
+  // ── Render ─────────────────────────────────────────────────────
+
+  function renderBreadcrumb() {
+    const el = document.getElementById('breadcrumb');
+    const segs = getBreadcrumbSegments();
+    if (!segs.length) { el.innerHTML = ''; return; }
+
+    el.innerHTML = segs.map((seg, i) => {
+      const prefix = i === 0 ? '' : '<span class="bc-sep">›</span>';
+      if (seg.isLast) {
+        return `${prefix}<span class="bc-item last">${escHtml(seg.name)}</span>`;
+      }
+      return `${prefix}<span class="bc-item" data-path="${escAttr(seg.path)}">${escHtml(seg.name)}</span>`;
+    }).join('');
+
+    el.querySelectorAll('.bc-item[data-path]').forEach(el => {
+      el.addEventListener('click', () => scan(el.dataset.path, false));
+    });
+  }
+
+  function renderStatus() {
+    const el = document.getElementById('status');
+    if (state.loading) {
+      el.innerHTML = '<span class="spinner"></span><span style="color:var(--muted)">Scanning…</span>';
+      return;
+    }
+    if (state.error) {
+      el.innerHTML = `<div class="error-msg">${escHtml(state.error)}</div>`;
+      return;
+    }
+    el.innerHTML = '';
+  }
+
+  function renderContent() {
+    const el = document.getElementById('content');
+
+    if (state.loading || state.error) {
+      el.innerHTML = '';
+      return;
+    }
+
+    if (!state.items.length) {
+      el.innerHTML = state.currentPath !== null
+        ? '<p class="empty-msg">This directory is empty.</p>'
+        : '';
+      return;
+    }
+
+    const maxSize = state.items[0].size || 1;
+
+    el.innerHTML = `
+      <p class="dir-summary">${state.items.length} item${state.items.length !== 1 ? 's' : ''} · ${formatSize(state.totalSize)} total</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th class="right">Size</th>
+            <th>Share</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="items-body"></tbody>
+      </table>
+    `;
+
+    const tbody = document.getElementById('items-body');
+
+    state.items.forEach(item => {
+      const pct = state.totalSize > 0
+        ? ((item.size / state.totalSize) * 100).toFixed(1)
+        : '0.0';
+      const barPct = ((item.size / maxSize) * 100).toFixed(1);
+      const icon = item.is_dir ? '📁' : '📄';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div class="name-cell">
+            <span class="icon">${icon}</span>
+            <span class="item-name ${item.is_dir ? 'dir-name' : ''}"
+                  ${item.is_dir ? `data-path="${escAttr(item.path)}"` : ''}
+            >${escHtml(item.name)}</span>
+          </div>
+        </td>
+        <td class="size-cell">${formatSize(item.size)}</td>
+        <td class="bar-cell">
+          <div class="bar-wrap">
+            <div class="bar-bg">
+              <div class="bar-fill" style="width:${barPct}%"></div>
+            </div>
+            <span class="bar-pct">${pct}%</span>
+          </div>
+        </td>
+        <td>
+          <div class="actions-cell">
+            <button class="small secondary btn-move">Move</button>
+            <button class="small danger btn-delete">Delete</button>
+          </div>
+        </td>
+      `;
+
+      if (item.is_dir) {
+        tr.querySelector('.dir-name').addEventListener('click', () => scan(item.path, false));
+      }
+      tr.querySelector('.btn-delete').addEventListener('click', () => promptDelete(item));
+      tr.querySelector('.btn-move').addEventListener('click', () => promptMove(item));
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function render() {
+    renderBreadcrumb();
+    renderStatus();
+    renderContent();
+  }
+
+  // ── Event wiring ───────────────────────────────────────────────
+
+  document.getElementById('scan-btn').addEventListener('click', () => {
+    const path = document.getElementById('path-input').value.trim();
+    if (path) scan(path, true);
+  });
+
+  document.getElementById('path-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const path = e.target.value.trim();
+      if (path) scan(path, true);
+    }
+  });
+
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-overlay')) hideModal();
+  });
+
+  // ── Auto-scan from URL ?path= param ───────────────────────────
+
+  const urlPath = new URLSearchParams(location.search).get('path');
+  if (urlPath) {
+    document.getElementById('path-input').value = urlPath;
+    scan(urlPath, true);
+  }
+</script>
+</body>
+</html>
